@@ -66,7 +66,6 @@ public:
 		return ErrorCode::error;
 	}
 };
-
 namespace Random
 {
 	static std::mt19937_64 engine;
@@ -274,6 +273,7 @@ public:
 		return File::GetData(File::GetData(System::Get()->systemName, "text"), oss.str());
 	}
 	virtual unsigned int Main() = 0;
+	virtual void SetSelect() = 0;
 };
 class Scene
 {
@@ -282,10 +282,12 @@ public:
 	{
 		next = start;
 		now = start;
+		pre = start;
 	}
 	std::vector<Task*> tasks;
 	unsigned int now;
 	unsigned int next;
+	unsigned int pre;
 	enum Menu : unsigned int
 	{
 		SELECT,
@@ -301,37 +303,57 @@ public:
 	{
 		std::cin >> now;
 	}
+	template<class T> T* GetScene(unsigned int index)
+	{
+		return (T*)&(*this->tasks[index]);
+	}
 };
 class Select : public Task
 {
+	std::vector<Scene::Menu> selecter;
 	Scene* scene;
 	unsigned int Main() override
 	{
-		for (unsigned int i = Scene::Menu::SELECT + 1; i < Scene::Menu::MENU_NUM; ++i)
+		scene->tasks[scene->pre]->SetSelect();
+		for (unsigned int i = 0; i < selecter.size(); ++i)
 		{
-			std::cout << scene->tasks[i]->GetNum() << ":" << scene->tasks[i]->To_String() << std::endl;
+			//std::cout << scene->tasks[i]->GetNum() << ":" << scene->tasks[i]->To_String() << std::endl;
+			std::cout << i << ":" << scene->tasks[selecter[i]]->To_String() << std::endl;
 		}
 		do
 		{
 			scene->Input();
-		} while (scene->now <= Scene::Menu::SELECT || scene->now >= Scene::Menu::MENU_NUM);
+		} while (scene->now < 0 || scene->now >= selecter.size());
 		Library::Clear();
-		return scene->now;
+		return selecter[scene->now];
 	}
+	void SetSelect() override;
 public:
 	explicit Select(unsigned int num, Scene* scene)
 		:Task(num)
 	{
 		this->scene = scene;
 	}
+	virtual ~Select()
+	{
+		this->selecter.clear();
+	}
+	void Add(const Scene::Menu menu)
+	{
+		this->selecter.emplace_back(menu);
+	}
+	void Clear()
+	{
+		this->selecter.clear();
+	}
 };
 class AddData : public Task
 {
 	unsigned int Main() override
 	{
-
 		return GetNum();
 	}
+	void SetSelect() override;
 public:
 	explicit AddData(unsigned int num)
 		:Task(num)
@@ -343,9 +365,9 @@ class DeleteData : public Task
 {
 	unsigned int Main() override
 	{
-
 		return GetNum();
 	}
+	void SetSelect() override;
 public:
 	explicit DeleteData(unsigned int num)
 		:Task(num)
@@ -364,6 +386,7 @@ class CreatePassword : public Task
 		std::cout << pass << std::endl;
 		return Scene::Menu::SELECT;
 	}
+	void SetSelect() override;
 public:
 	explicit CreatePassword(unsigned int num)
 		:Task(num)
@@ -375,9 +398,9 @@ class AllDataBrowsing : public Task
 {
 	unsigned int Main() override
 	{
-
 		return GetNum();
 	}
+	void SetSelect() override;
 public:
 	explicit AllDataBrowsing(unsigned int num)
 		:Task(num)
@@ -389,8 +412,9 @@ class Exit : public Task
 {
 	unsigned int Main() override
 	{
-		return GetNum();
+		return Scene::Menu::EXIT;
 	}
+	void SetSelect() override;
 public:
 	explicit Exit(unsigned int num)
 		:Task(num)
@@ -409,6 +433,7 @@ class ChangeSeed : public Task
 		File::RandomSeedChenge(File::GetData(System::Get()->systemName, "seed"), value);
 		return Scene::Menu::SELECT;
 	}
+	void SetSelect() override;
 public:
 	explicit ChangeSeed(unsigned int num)
 		:Task(num)
@@ -424,26 +449,16 @@ class MainMenu : public Scene
 	}
 	static MainMenu* mainMenu;
 	explicit MainMenu()
-		:Scene(Menu::SELECT)
+		:Scene(Menu::EXIT)
 	{
-		this->tasks.emplace_back(new Select(Menu::SELECT, this));
-		this->tasks.emplace_back(new AddData(Menu::ADD_DATA));
-		this->tasks.emplace_back(new DeleteData(Menu::DELETE_DATA));
-		this->tasks.emplace_back(new CreatePassword(Menu::CREATE_PASSWORD));
-		this->tasks.emplace_back(new AllDataBrowsing(Menu::ALLDATA_BROWSING));
-		this->tasks.emplace_back(new ChangeSeed(Menu::CHANGE_SEED));
-		this->tasks.emplace_back(new Exit(Menu::EXIT));
-		while (next != Menu::EXIT)
-		{
-			now = next;
-			next = this->Main();
-		}
+		
 	}
 public:
 	virtual ~MainMenu()
 	{
 		for (int i = 0; i < this->tasks.size(); ++i)
 		{
+			//Library::Delete<Task>(this->tasks[i]);
 			delete this->tasks[i];
 		}
 	}
@@ -456,13 +471,99 @@ public:
 	}
 	static void Delete()
 	{
-		Library::Delete<MainMenu>(MainMenu::mainMenu);
+		//Library::Delete<MainMenu>(MainMenu::mainMenu);
+		delete MainMenu::mainMenu;
 	}
 	static MainMenu* Get()
 	{
 		return mainMenu;
 	}
+	void Run()
+	{
+		this->tasks.emplace_back(new Select(Menu::SELECT, this));
+		this->tasks.emplace_back(new AddData(Menu::ADD_DATA));
+		this->tasks.emplace_back(new DeleteData(Menu::DELETE_DATA));
+		this->tasks.emplace_back(new CreatePassword(Menu::CREATE_PASSWORD));
+		this->tasks.emplace_back(new AllDataBrowsing(Menu::ALLDATA_BROWSING));
+		this->tasks.emplace_back(new ChangeSeed(Menu::CHANGE_SEED));
+		this->tasks.emplace_back(new Exit(Menu::EXIT));
+		while (next != Menu::EXIT)
+		{
+			now = next;
+			next = this->Main();
+			pre = now;
+		}
+	}
 };
+void Select::SetSelect() {
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void AddData::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void DeleteData::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void CreatePassword::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void AllDataBrowsing::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void Exit::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void ChangeSeed::SetSelect()
+{
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Clear();
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ADD_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::DELETE_DATA);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CREATE_PASSWORD);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
+	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
 System* System::mainSystem = nullptr;
 ErrorCode* ErrorCode::error = nullptr;
 MainMenu* MainMenu::mainMenu = nullptr;
@@ -475,6 +576,7 @@ int main()
 		Random::Init();
 		System::Create("PMSystem.ini");
 		MainMenu::Create();
+		MainMenu::Get()->Run();
 		MainMenu::Delete();
 		System::Delete();
 		ErrorCode::Delete();
