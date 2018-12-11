@@ -262,6 +262,10 @@ public:
 	{
 
 	}
+	virtual ~Task()
+	{
+
+	}
 	const unsigned int GetNum() const
 	{
 		return this->num;
@@ -317,7 +321,6 @@ class Select : public Task
 		scene->tasks[scene->pre]->SetSelect();
 		for (unsigned int i = 0; i < selecter.size(); ++i)
 		{
-			//std::cout << scene->tasks[i]->GetNum() << ":" << scene->tasks[i]->To_String() << std::endl;
 			std::cout << i << ":" << scene->tasks[selecter[i]]->To_String() << std::endl;
 		}
 		do
@@ -337,6 +340,7 @@ public:
 	virtual ~Select()
 	{
 		this->selecter.clear();
+		std::cout << "Select\n";
 	}
 	void Add(const Scene::Menu menu)
 	{
@@ -359,6 +363,10 @@ public:
 		:Task(num)
 	{
 
+	}
+	virtual ~AddData()
+	{
+		std::cout << "AddData\n";
 	}
 };
 class DeleteData : public Task
@@ -448,18 +456,18 @@ class MainMenu : public Scene
 		return this->tasks[this->now]->Main();
 	}
 	static MainMenu* mainMenu;
-	explicit MainMenu()
-		:Scene(Menu::EXIT)
-	{
-		
-	}
 public:
+	explicit MainMenu()
+		:Scene(Menu::SELECT)
+	{
+
+	}
 	virtual ~MainMenu()
 	{
 		for (int i = 0; i < this->tasks.size(); ++i)
 		{
-			//Library::Delete<Task>(this->tasks[i]);
-			delete this->tasks[i];
+			Library::Delete<Task>(this->tasks[i]);
+			this->tasks[i] = nullptr;
 		}
 	}
 	static void Create()
@@ -471,8 +479,7 @@ public:
 	}
 	static void Delete()
 	{
-		//Library::Delete<MainMenu>(MainMenu::mainMenu);
-		delete MainMenu::mainMenu;
+		Library::Delete<MainMenu>(MainMenu::mainMenu);
 	}
 	static MainMenu* Get()
 	{
@@ -570,6 +577,7 @@ MainMenu* MainMenu::mainMenu = nullptr;
 int main()
 {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	//_CrtSetBreakAlloc(174);
 	try
 	{
 		ErrorCode::Create();
