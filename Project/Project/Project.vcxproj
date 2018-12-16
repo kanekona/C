@@ -21,6 +21,9 @@
   <ItemGroup>
     <ClCompile Include="PasswordManagement.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\..\..\gitOG2D\OG2D\OG2D\src\lib\OGSystem\Icon\Resource.rc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{6527E929-A6E4-4B24-BA2A-6656A680527F}</ProjectGuid>
