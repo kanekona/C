@@ -36,6 +36,16 @@ namespace Library
 	{
 		system("cls");
 	}
+	void Pause()
+	{
+		system("pause");
+	}
+	struct UserData
+	{
+		std::string passWord;
+		std::string userName;
+		std::string acount;
+	};
 }
 class ErrorCode
 {
@@ -195,9 +205,9 @@ public:
 			{
 				continue;
 			}
-			if (tag == line.substr(0, line.find("=")))
+			if (tag == line.substr(0, line.find_first_of("=")))
 			{
-				return line.substr(line.find("=") + 1);
+				return line.substr(line.find_first_of("=") + 1);
 			}
 		}
 		return std::string();
@@ -253,14 +263,16 @@ public:
 		return System::mainSystem;
 	}
 };
+class Scene;
 class Task
 {
 	const unsigned int num;
+	Scene* scene;
 public:
-	explicit Task(unsigned int num)
+	explicit Task(unsigned int num,Scene* scene)
 		:num(num)
 	{
-
+		this->scene = scene;
 	}
 	virtual ~Task()
 	{
@@ -276,11 +288,27 @@ public:
 		oss << num;
 		return File::GetData(File::GetData(System::Get()->systemName, "text"), oss.str());
 	}
+	unsigned int IsPlay(unsigned int id)
+	{
+		unsigned int play;
+		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), id) << std::endl;
+		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 107);
+		std::cin >> play;
+		return play;
+	}
+	Scene* GetScene()
+	{
+		return this->scene;
+	}
 	virtual unsigned int Main() = 0;
 	virtual void SetSelect() = 0;
 };
 class Scene
 {
+	std::vector<Task*> tasks;
+	unsigned int now;
+	unsigned int next;
+	unsigned int pre;
 public:
 	explicit Scene(unsigned int  start)
 	{
@@ -288,10 +316,14 @@ public:
 		now = start;
 		pre = start;
 	}
-	std::vector<Task*> tasks;
-	unsigned int now;
-	unsigned int next;
-	unsigned int pre;
+	virtual ~Scene()
+	{
+		for (int i = 0; i < this->tasks.size(); ++i)
+		{
+			Library::Delete<Task>(this->tasks[i]);
+			this->tasks[i] = nullptr;
+		}
+	}
 	enum Menu : unsigned int
 	{
 		SELECT,
@@ -311,36 +343,59 @@ public:
 	{
 		return (T*)&(*this->tasks[index]);
 	}
+	void Main()
+	{
+		now = next;
+		next = this->tasks[this->now]->Main();
+		pre = now;
+	}
+	unsigned int GetNow()
+	{
+		return this->now;
+	}
+	unsigned int GetPre()
+	{
+		return this->pre;
+	}
+	unsigned int GetNext()
+	{
+		return this->next;
+	}
+	Task* GetTask(unsigned int id)
+	{
+		return this->tasks[id];
+	}
+	void Add(Task* task)
+	{
+		this->tasks.emplace_back(task);
+	}
 };
 class Select : public Task
 {
 	std::vector<Scene::Menu> selecter;
-	Scene* scene;
 	unsigned int Main() override
 	{
-		scene->tasks[scene->pre]->SetSelect();
+		unsigned int now;
+		GetScene()->GetTask(GetScene()->GetPre())->SetSelect();
 		for (unsigned int i = 0; i < selecter.size(); ++i)
 		{
-			std::cout << i << ":" << scene->tasks[selecter[i]]->To_String() << std::endl;
+			std::cout << i << ":" << GetScene()->GetTask(this->selecter[i])->To_String() << std::endl;
 		}
 		do
 		{
-			scene->Input();
-		} while (scene->now < 0 || scene->now >= selecter.size());
-		Library::Clear();
-		return selecter[scene->now];
+			std::cin >> now;
+		} while (now < 0 || now >= selecter.size());
+		return selecter[now];
 	}
 	void SetSelect() override;
 public:
 	explicit Select(unsigned int num, Scene* scene)
-		:Task(num)
+		:Task(num,scene)
 	{
-		this->scene = scene;
 	}
 	virtual ~Select()
 	{
 		this->selecter.clear();
-		std::cout << "Select\n";
 	}
 	void Add(const Scene::Menu menu)
 	{
@@ -353,65 +408,146 @@ public:
 };
 class AddData : public Task
 {
+	Library::UserData data;
+	void InputUserName()
+	{
+		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 102) << ":";
+		std::cin >> data.userName;
+	}
+	void InputPassWord()
+	{
+		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 103) << ":";
+		std::cin >> data.passWord;
+	}
+	void InputAcount()
+	{
+		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 104) << ":";
+		std::cin >> data.acount;
+	}
+	void GetPassWord();
+	void Input()
+	{
+		this->InputAcount();
+		this->InputUserName();
+		if (GetScene()->GetPre() != Scene::Menu::CREATE_PASSWORD)
+		{
+			this->InputPassWord();
+		}
+		else
+		{
+			this->GetPassWord();
+		}
+	}
+	void Output()
+	{
+		std::string text = File::GetData(File::GetData(System::Get()->systemName, "text"), 105) + data.acount + " " + data.userName + " " + data.passWord + "\n";
+		File::AddOutput(File::GetData(System::Get()->systemName, "data"), text);
+	}
+
 	unsigned int Main() override
 	{
-		return GetNum();
+		this->Input();
+		this->Output();
+		return Scene::Menu::SELECT;
 	}
 	void SetSelect() override;
 public:
-	explicit AddData(unsigned int num)
-		:Task(num)
+	explicit AddData(unsigned int num,Scene* scene)
+		:Task(num,scene)
 	{
-
-	}
-	virtual ~AddData()
-	{
-		std::cout << "AddData\n";
 	}
 };
 class DeleteData : public Task
 {
 	unsigned int Main() override
 	{
-		return GetNum();
+		return Scene::Menu::SELECT;
 	}
 	void SetSelect() override;
 public:
-	explicit DeleteData(unsigned int num)
-		:Task(num)
+	explicit DeleteData(unsigned int num,Scene* scene)
+		:Task(num,scene)
 	{
 
 	}
 };
 class CreatePassword : public Task
 {
+	Library::UserData userData;
 	unsigned int Main() override
 	{
 		unsigned int value;
 		std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 100);
 		std::cin >> value;
-		std::string pass = Random::GetRand(File::GetData(File::GetData(System::Get()->systemName, "text"), 101), value);
-		std::cout << pass << std::endl;
-		return Scene::Menu::SELECT;
+		userData.passWord = Random::GetRand(File::GetData(File::GetData(System::Get()->systemName, "text"), 101), value);
+		std::cout << userData.passWord << std::endl;
+		return this->IsPlay(108) ? Scene::Menu::ADD_DATA : Scene::Menu::SELECT;
 	}
 	void SetSelect() override;
 public:
-	explicit CreatePassword(unsigned int num)
-		:Task(num)
+	explicit CreatePassword(unsigned int num, Scene* scene)
+		:Task(num,scene)
 	{
 
+	}
+	std::string GetPassWord()
+	{
+		return this->userData.passWord;
 	}
 };
 class AllDataBrowsing : public Task
 {
+	std::vector<Library::UserData> userDataList;
 	unsigned int Main() override
 	{
-		return GetNum();
+		this->Load();
+		this->Draw();
+		this->Reset();
+		return this->IsPlay(106) ? Scene::Menu::SELECT : Scene::Menu::EXIT;
+	}
+	void Load()
+	{
+		std::ifstream ifs(File::GetData(System::Get()->systemName, "data"));
+		if (!ifs)
+		{
+			throw std::runtime_error(ErrorCode::Get()->GetCode(2));
+		}
+		std::string line;
+		std::string tag = File::GetData(File::GetData(System::Get()->systemName, "text"), 105);
+		while (std::getline(ifs, line))
+		{
+			if (line.at(0) == '/')
+			{
+				continue;
+			}
+			if (tag.substr(0,tag.find("=")) == line.substr(0, line.find_first_of("=")))
+			{
+				std::string text = line.substr(line.find_first_of("=") + 1);
+				Library::UserData userdata;
+				std::istringstream iss(text);
+				iss >> userdata.acount >> userdata.userName >> userdata.passWord;
+				this->userDataList.push_back(userdata);
+			}
+		}
+	}
+	void Draw()
+	{
+		for (auto id = this->userDataList.begin(); id != this->userDataList.end(); ++id)
+		{
+			std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 104) << ":" << id->acount << std::endl;
+			std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 102) << ":" << id->userName << std::endl;
+			std::cout << File::GetData(File::GetData(System::Get()->systemName, "text"), 103) << ":" << id->passWord << std::endl;
+			std::cout << "_________________________________________________________" << std::endl;
+		}
+	}
+	void Reset()
+	{
+		this->userDataList.clear();
 	}
 	void SetSelect() override;
 public:
-	explicit AllDataBrowsing(unsigned int num)
-		:Task(num)
+	explicit AllDataBrowsing(unsigned int num, Scene* scene)
+		:Task(num,scene)
 	{
 
 	}
@@ -424,8 +560,8 @@ class Exit : public Task
 	}
 	void SetSelect() override;
 public:
-	explicit Exit(unsigned int num)
-		:Task(num)
+	explicit Exit(unsigned int num, Scene* scene)
+		:Task(num,scene)
 	{
 
 	}
@@ -439,36 +575,34 @@ class ChangeSeed : public Task
 		unsigned int value;
 		ss >> value;
 		File::RandomSeedChenge(File::GetData(System::Get()->systemName, "seed"), value);
+		Library::Pause();
 		return Scene::Menu::SELECT;
 	}
 	void SetSelect() override;
 public:
-	explicit ChangeSeed(unsigned int num)
-		:Task(num)
+	explicit ChangeSeed(unsigned int num, Scene* scene)
+		:Task(num,scene)
 	{
 
 	}
 };
 class MainMenu : public Scene
 {
-	unsigned int Main()
-	{
-		return this->tasks[this->now]->Main();
-	}
 	static MainMenu* mainMenu;
 public:
 	explicit MainMenu()
 		:Scene(Menu::SELECT)
 	{
-
+		this->Add(new Select(Menu::SELECT, this));	
+		this->Add(new AddData(Menu::ADD_DATA, this));
+		this->Add(new DeleteData(Menu::DELETE_DATA, this));
+		this->Add(new CreatePassword(Menu::CREATE_PASSWORD, this));
+		this->Add(new AllDataBrowsing(Menu::ALLDATA_BROWSING, this));
+		this->Add(new ChangeSeed(Menu::CHANGE_SEED, this));
+		this->Add(new Exit(Menu::EXIT, this));
 	}
 	virtual ~MainMenu()
 	{
-		for (int i = 0; i < this->tasks.size(); ++i)
-		{
-			Library::Delete<Task>(this->tasks[i]);
-			this->tasks[i] = nullptr;
-		}
 	}
 	static void Create()
 	{
@@ -487,18 +621,11 @@ public:
 	}
 	void Run()
 	{
-		this->tasks.emplace_back(new Select(Menu::SELECT, this));
-		this->tasks.emplace_back(new AddData(Menu::ADD_DATA));
-		this->tasks.emplace_back(new DeleteData(Menu::DELETE_DATA));
-		this->tasks.emplace_back(new CreatePassword(Menu::CREATE_PASSWORD));
-		this->tasks.emplace_back(new AllDataBrowsing(Menu::ALLDATA_BROWSING));
-		this->tasks.emplace_back(new ChangeSeed(Menu::CHANGE_SEED));
-		this->tasks.emplace_back(new Exit(Menu::EXIT));
-		while (next != Menu::EXIT)
+
+		while (GetNext() != Menu::EXIT)
 		{
-			now = next;
-			next = this->Main();
-			pre = now;
+			this->Main();
+			Library::Clear();
 		}
 	}
 };
@@ -570,6 +697,10 @@ void ChangeSeed::SetSelect()
 	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::ALLDATA_BROWSING);
 	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::CHANGE_SEED);
 	MainMenu::Get()->GetScene<Select>(Scene::SELECT)->Add(Scene::EXIT);
+}
+void AddData::GetPassWord() 
+{
+	data.passWord = GetScene()->GetScene<CreatePassword>(Scene::Menu::CREATE_PASSWORD)->GetPassWord();
 }
 System* System::mainSystem = nullptr;
 ErrorCode* ErrorCode::error = nullptr;
